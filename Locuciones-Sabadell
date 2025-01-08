@@ -1,0 +1,263 @@
+// ==UserScript==
+// @name         Buscar y Modificar Datos con Reporte Minimizable y Móvil
+// @namespace    http://tampermonkey.net/
+// @version      2.6
+// @description  Busca datos, modifica el checkbox "Contingencia", guarda los cambios y genera un reporte con los resultados. Incluye interfaz minimizable y móvil.
+// @author       Javiji
+// @match        https://apps.mypurecloud.de/*
+// @grant        none
+// ==/UserScript==
+
+
+
+(function () {
+    'use strict';
+
+    // Variables globales
+    let listaDatos = [];
+    let index = 0;
+    let reporte = [];
+    let botonInicio, botonReporte, contenedor, textarea, botonMinimizar;
+
+    function procesarElemento() {
+        if (index >= listaDatos.length) {
+            console.log("Proceso finalizado.");
+            botonInicio.disabled = false;
+            botonInicio.textContent = "Iniciar Proceso";
+            botonReporte.disabled = false;
+            return;
+        }
+
+        const dato = listaDatos[index];
+        console.log(`Procesando: ${dato}`);
+
+        const campoBusqueda = document.querySelector('input[data-testid="dataTableRows-search-input"]');
+        if (!campoBusqueda) {
+            console.error("No se encontró el campo de búsqueda.");
+            return;
+        }
+
+        campoBusqueda.value = dato;
+        campoBusqueda.dispatchEvent(new Event('input', { bubbles: true }));
+
+        setTimeout(() => {
+            const elementoResultado = Array.from(document.querySelectorAll('gux-truncate-beta'))
+                .find(el => el.textContent.trim() === dato);
+            }, 2000); // Cambia de 1000 a 2000 o un valor mayor. Solucion a que no encuentre algunas lineas.
+
+            if (elementoResultado) {
+                elementoResultado.click();
+
+                setTimeout(() => {
+                    const checkboxContingencia = document.querySelector('input[data-testid="Contingencia-input"]');
+                    if (checkboxContingencia) {
+                        const estadoInicial = checkboxContingencia.checked;
+                        console.log(`Estado inicial de "Contingencia" para ${dato}: ${estadoInicial ? "Marcada" : "Desmarcada"}`);
+
+                        checkboxContingencia.click();
+                        checkboxContingencia.dispatchEvent(new Event('change', { bubbles: true }));
+
+                        const nuevoEstado = !estadoInicial;
+                        console.log(`Nuevo estado de "Contingencia" para ${dato}: ${nuevoEstado ? "Marcada" : "Desmarcada"}`);
+
+                        reporte.push({
+                            dato: dato,
+                            estadoInicial: estadoInicial ? "Marcada" : "Desmarcada",
+                            estadoFinal: nuevoEstado ? "Marcada" : "Desmarcada",
+                        });
+
+                        const botonGuardar = Array.from(document.querySelectorAll('span'))
+                            .find(el => el.textContent.trim() === "Guardar");
+
+                        if (botonGuardar) {
+                            botonGuardar.click();
+                            setTimeout(() => {
+                                index++;
+                                procesarElemento();
+                            }, 2000);
+                        } else {
+                            console.error("No se encontró el botón de guardar.");
+                        }
+                    } else {
+                        console.error("No se encontró la casilla de verificación 'Contingencia'.");
+                        reporte.push({
+                            dato: dato,
+                            error: "No se encontró la casilla de verificación 'Contingencia'.",
+                        });
+                        index++;
+                        procesarElemento();
+                    }
+                }, 1000);
+            } else {
+                console.error(`No se encontró el resultado para: ${dato}`);
+                reporte.push({
+                    dato: dato,
+                    error: "No se encontró el resultado en la búsqueda.",
+                });
+                index++;
+                procesarElemento();
+            }
+        }, 1000);
+    }
+
+    function generarReporte() {
+        let contenidoHTML = `
+            <html>
+            <head>
+                <title>Reporte de Contingencia</title>
+                <style>
+                    body { font-family: Arial, sans-serif; margin: 20px; }
+                    table { border-collapse: collapse; width: 100%; }
+                    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                    th { background-color: #f2f2f2; }
+                    tr:nth-child(even) { background-color: #f9f9f9; }
+                </style>
+            </head>
+            <body>
+                <h1>Reporte de Contingencia</h1>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Dato</th>
+                            <th>Estado Inicial</th>
+                            <th>Estado Final</th>
+                            <th>Error</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+
+        reporte.forEach(entry => {
+            contenidoHTML += `
+                <tr>
+                    <td>${entry.dato}</td>
+                    <td>${entry.estadoInicial || "-"}</td>
+                    <td>${entry.estadoFinal || "-"}</td>
+                    <td>${entry.error || "-"}</td>
+                </tr>
+            `;
+        });
+
+        contenidoHTML += `
+                    </tbody>
+                </table>
+            </body>
+            </html>
+        `;
+
+        const nuevaPestana = window.open("", "_blank");
+        nuevaPestana.document.write(contenidoHTML);
+        nuevaPestana.document.close();
+    }
+
+    function agregarInterfaz() {
+        contenedor = document.createElement('div');
+        contenedor.style.position = "fixed";
+        contenedor.style.top = "10px";
+        contenedor.style.left = "10px";
+        contenedor.style.zIndex = "9999";
+        contenedor.style.padding = "15px";
+        contenedor.style.backgroundColor = "white";
+        contenedor.style.border = "1px solid #ccc";
+        contenedor.style.borderRadius = "5px";
+        contenedor.style.boxShadow = "0 4px 6px rgba(0, 0, 0, 0.1)";
+        contenedor.style.cursor = "move";
+        contenedor.style.width = "auto"; // Ajuste para permitir movimiento libre
+
+        const titulo = document.createElement('h4');
+        titulo.textContent = "Datos a Buscar";
+        titulo.style.margin = "0 0 10px 0";
+
+        textarea = document.createElement('textarea');
+        textarea.placeholder = "Introduce un dato por línea";
+        textarea.style.width = "300px";
+        textarea.style.height = "150px";
+        textarea.style.marginBottom = "10px";
+        textarea.style.resize = "none"; // Evitar redimensionar manualmente
+
+        botonInicio = document.createElement('button');
+        botonInicio.textContent = "Iniciar Proceso";
+        botonInicio.style.padding = "10px 20px";
+        botonInicio.style.backgroundColor = "#4CAF50";
+        botonInicio.style.color = "white";
+        botonInicio.style.border = "none";
+        botonInicio.style.borderRadius = "5px";
+        botonInicio.style.cursor = "pointer";
+
+        botonInicio.addEventListener("click", () => {
+            listaDatos = textarea.value.split("\n").map(dato => dato.trim()).filter(dato => dato !== "");
+            if (listaDatos.length === 0) {
+                alert("Por favor, introduce al menos un dato.");
+                return;
+            }
+
+            botonInicio.disabled = true;
+            botonInicio.textContent = "Procesando...";
+            botonReporte.disabled = true;
+            index = 0;
+            reporte = [];
+            procesarElemento();
+        });
+
+        botonReporte = document.createElement('button');
+        botonReporte.textContent = "Ver Reporte";
+        botonReporte.style.padding = "10px 20px";
+        botonReporte.style.marginLeft = "10px";
+        botonReporte.style.backgroundColor = "#2196F3";
+        botonReporte.style.color = "white";
+        botonReporte.style.border = "none";
+        botonReporte.style.borderRadius = "5px";
+        botonReporte.style.cursor = "pointer";
+        botonReporte.disabled = true;
+
+        botonReporte.addEventListener("click", generarReporte);
+
+        botonMinimizar = document.createElement('button');
+        botonMinimizar.textContent = "-";
+        botonMinimizar.style.position = "absolute";
+        botonMinimizar.style.top = "5px";
+        botonMinimizar.style.right = "5px";
+        botonMinimizar.style.border = "none";
+        botonMinimizar.style.backgroundColor = "#4CAF50"; // Verde
+        botonMinimizar.style.color = "white";
+        botonMinimizar.style.fontSize = "16px";
+        botonMinimizar.style.width = "30px";
+        botonMinimizar.style.height = "30px";
+        botonMinimizar.style.borderRadius = "50%";
+        botonMinimizar.style.cursor = "pointer";
+        botonMinimizar.style.textAlign = "center";
+
+        botonMinimizar.addEventListener("click", () => {
+            const minimizado = textarea.style.display === "none";
+            textarea.style.display = minimizado ? "block" : "none";
+            botonInicio.style.display = minimizado ? "inline-block" : "none";
+            botonReporte.style.display = minimizado ? "inline-block" : "none";
+            botonMinimizar.textContent = minimizado ? "-" : "+";
+        });
+
+        // Hacer que el contenedor sea movible
+        contenedor.onmousedown = (e) => {
+            const offsetX = e.clientX - contenedor.getBoundingClientRect().left;
+            const offsetY = e.clientY - contenedor.getBoundingClientRect().top;
+
+            document.onmousemove = (e) => {
+                contenedor.style.top = `${e.clientY - offsetY}px`;
+                contenedor.style.left = `${e.clientX - offsetX}px`;
+            };
+
+            document.onmouseup = () => {
+                document.onmousemove = null;
+                document.onmouseup = null;
+            };
+        };
+
+        contenedor.appendChild(titulo);
+        contenedor.appendChild(textarea);
+        contenedor.appendChild(botonInicio);
+        contenedor.appendChild(botonReporte);
+        contenedor.appendChild(botonMinimizar);
+        document.body.appendChild(contenedor);
+    }
+
+    window.addEventListener('load', agregarInterfaz);
+})();
