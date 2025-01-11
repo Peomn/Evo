@@ -1,14 +1,12 @@
 // ==UserScript==
 // @name         Buscar y Modificar Datos con Reporte Minimizable y Móvil
 // @namespace    http://tampermonkey.net/
-// @version      2.6
+// @version      2.7
 // @description  Busca datos, modifica el checkbox "Contingencia", guarda los cambios y genera un reporte con los resultados. Incluye interfaz minimizable y móvil.
 // @author       Javiji
 // @match        https://apps.mypurecloud.de/*
 // @grant        none
 // ==/UserScript==
-
-
 
 (function () {
     'use strict';
@@ -34,6 +32,12 @@
         const campoBusqueda = document.querySelector('input[data-testid="dataTableRows-search-input"]');
         if (!campoBusqueda) {
             console.error("No se encontró el campo de búsqueda.");
+            reporte.push({
+                dato: dato,
+                error: "No se encontró el campo de búsqueda.",
+            });
+            index++;
+            procesarElemento();
             return;
         }
 
@@ -43,7 +47,6 @@
         setTimeout(() => {
             const elementoResultado = Array.from(document.querySelectorAll('gux-truncate-beta'))
                 .find(el => el.textContent.trim() === dato);
-            }, 2000); // Cambia de 1000 a 2000 o un valor mayor. Solucion a que no encuentre algunas lineas.
 
             if (elementoResultado) {
                 elementoResultado.click();
@@ -77,6 +80,12 @@
                             }, 2000);
                         } else {
                             console.error("No se encontró el botón de guardar.");
+                            reporte.push({
+                                dato: dato,
+                                error: "No se encontró el botón de guardar.",
+                            });
+                            index++;
+                            procesarElemento();
                         }
                     } else {
                         console.error("No se encontró la casilla de verificación 'Contingencia'.");
@@ -97,7 +106,7 @@
                 index++;
                 procesarElemento();
             }
-        }, 1000);
+        }, 2000);
     }
 
     function generarReporte() {
@@ -162,7 +171,7 @@
         contenedor.style.borderRadius = "5px";
         contenedor.style.boxShadow = "0 4px 6px rgba(0, 0, 0, 0.1)";
         contenedor.style.cursor = "move";
-        contenedor.style.width = "auto"; // Ajuste para permitir movimiento libre
+        contenedor.style.width = "auto";
 
         const titulo = document.createElement('h4');
         titulo.textContent = "Datos a Buscar";
@@ -173,7 +182,7 @@
         textarea.style.width = "300px";
         textarea.style.height = "150px";
         textarea.style.marginBottom = "10px";
-        textarea.style.resize = "none"; // Evitar redimensionar manualmente
+        textarea.style.resize = "none";
 
         botonInicio = document.createElement('button');
         botonInicio.textContent = "Iniciar Proceso";
@@ -218,7 +227,7 @@
         botonMinimizar.style.top = "5px";
         botonMinimizar.style.right = "5px";
         botonMinimizar.style.border = "none";
-        botonMinimizar.style.backgroundColor = "#4CAF50"; // Verde
+        botonMinimizar.style.backgroundColor = "#4CAF50";
         botonMinimizar.style.color = "white";
         botonMinimizar.style.fontSize = "16px";
         botonMinimizar.style.width = "30px";
@@ -235,8 +244,8 @@
             botonMinimizar.textContent = minimizado ? "-" : "+";
         });
 
-        // Hacer que el contenedor sea movible
         contenedor.onmousedown = (e) => {
+            if (e.target !== contenedor) return;
             const offsetX = e.clientX - contenedor.getBoundingClientRect().left;
             const offsetY = e.clientY - contenedor.getBoundingClientRect().top;
 
@@ -251,12 +260,16 @@
             };
         };
 
-        contenedor.appendChild(titulo);
-        contenedor.appendChild(textarea);
-        contenedor.appendChild(botonInicio);
-        contenedor.appendChild(botonReporte);
-        contenedor.appendChild(botonMinimizar);
-        document.body.appendChild(contenedor);
+        if (contenedor && titulo && textarea && botonInicio && botonReporte && botonMinimizar) {
+            contenedor.appendChild(titulo);
+            contenedor.appendChild(textarea);
+            contenedor.appendChild(botonInicio);
+            contenedor.appendChild(botonReporte);
+            contenedor.appendChild(botonMinimizar);
+            document.body.appendChild(contenedor);
+        } else {
+            console.error("Error al crear la interfaz: algún elemento no se generó correctamente.");
+        }
     }
 
     window.addEventListener('load', agregarInterfaz);
